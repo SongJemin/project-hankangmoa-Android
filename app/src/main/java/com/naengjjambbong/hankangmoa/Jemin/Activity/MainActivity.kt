@@ -15,16 +15,22 @@ import android.provider.Settings
 import android.support.v4.app.ActivityCompat
 import android.support.v4.content.ContextCompat
 import android.support.v7.app.AlertDialog
+import android.util.Log
 import android.view.View
 import android.view.WindowManager
 import android.widget.ImageButton
+import android.widget.Toast
 
 
-import com.naengjjambbong.hankangmoa.Jemin.Fragment.HomeFragment
-import com.naengjjambbong.hankangmoa.Jemin.Fragment.MapFragment
 import com.naengjjambbong.hankangmoa.Gahee.Fragment.MypageSteamListFragment
-import com.naengjjambbong.hankangmoa.Jemin.Fragment.PhotoFragment
+import com.naengjjambbong.hankangmoa.Jemin.Fragment.*
 import kotlinx.android.synthetic.main.activity_main.*
+import android.provider.SyncStateContract.Helpers.update
+import android.content.pm.PackageInfo
+import android.util.Base64
+import java.security.MessageDigest
+import java.security.NoSuchAlgorithmException
+
 
 class MainActivity : AppCompatActivity(), View.OnClickListener {
 
@@ -39,12 +45,15 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
     private var bt_tab3: ImageButton? = null
     private var bt_tab4: ImageButton? = null
 
+    var tabFlag : Int = 0
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
         // 추가된 소스, Toolbar를 생성한다.
+
 
         val view = window.decorView
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -57,6 +66,8 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             // 21 버전 이상일 때
             window.statusBarColor = Color.BLACK
         }
+
+        mainActivity = this
 
         // 위젯에 대한 참조
         bt_tab1 = findViewById(R.id.main_hometab_btn) as ImageButton
@@ -74,7 +85,19 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         callFragment(FRAGMENT1)
 
         main_hometab_btn.setSelected(true)
-
+        //다음개발자 - 해시 키 출력하는 코드
+        try {
+            val info = packageManager.getPackageInfo(packageName, PackageManager.GET_SIGNATURES)
+            for (signature in info.signatures) {
+                val md = MessageDigest.getInstance("SHA")
+                md.update(signature.toByteArray())
+                Log.d("KeyHash:", Base64.encodeToString(md.digest(), Base64.DEFAULT))
+            }
+        } catch (e: PackageManager.NameNotFoundException) {
+            e.printStackTrace()
+        } catch (e: NoSuchAlgorithmException) {
+            e.printStackTrace()
+        }
 
         locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
 
@@ -98,7 +121,12 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             requestMyLocation()
         }//마시멜로 아래
 
+
+
+
+
     }
+
 
     //나의 위치 요청
     fun requestMyLocation() {
@@ -165,7 +193,7 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
         when (frament_no) {
             1 -> {
                 // '홈 탭' 호출
-                val homeFragment = HomeFragment()
+                val homeFragment = HomeMainFragment()
                 transaction.replace(R.id.fragment_container, homeFragment)
                 transaction.commit()
             }
@@ -195,17 +223,49 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
 
     }
 
+    // 뒤로가기 버튼 입력시간이 담길 long 객체
+    var pressedTime : Long = 0
+
+    // 리스너 생성
+    interface OnBackPressedListener {
+        fun onBack()
+    }
+
+    // 리스너 객체 생성
+    var mBackListener : OnBackPressedListener? = null
+
+    // 리스너 설정 메소드
+    fun setOnBackPressedListener(listener : OnBackPressedListener? ) {
+        mBackListener = listener
+    }
+
     override fun onBackPressed() {
-        AlertDialog.Builder(this)
-                .setIcon(android.R.drawable.ic_dialog_alert)
-                .setMessage("한강모아를 종료할까요?")
-                .setPositiveButton("예") { dialog, which ->
-                    moveTaskToBack(true)
+        // 다른 Fragment 에서 리스너를 설정했을 때 처리됩니다.
+        if (mBackListener != null) {
+            Log.v("tag", "여기 실행")
+            mBackListener!!.onBack()
+            Log.e("!!!", "Listener is not null")
+            // 리스너가 설정되지 않은 상태(예를들어 메인Fragment)라면
+            // 뒤로가기 버튼을 연속적으로 두번 눌렀을 때 앱이 종료됩니다.
+        } else {
+            Log.e("!!!", "Listener is null")
+            if(pressedTime == 0L) {
+                Toast.makeText(applicationContext, "한 번 더 누르면 종료됩니다.",Toast.LENGTH_LONG).show()
+                pressedTime = System.currentTimeMillis()
+            } else {
+                val seconds = (System.currentTimeMillis() - pressedTime).toInt()
+
+                if (seconds > 2000) {
+                    Toast.makeText(applicationContext, "한 번 더 누르면 종료됩니다.",Toast.LENGTH_LONG).show()
+                    pressedTime = 0
+                } else {
+                    super.onBackPressed()
+                    Log.e("!!!", "onBackPressed : finish, killProcess")
                     finish()
                     android.os.Process.killProcess(android.os.Process.myPid())
                 }
-                .setNegativeButton("아니요", null)
-                .show()
+            }
+        }
     }
 
     fun initActivityDesign(){
@@ -217,6 +277,11 @@ class MainActivity : AppCompatActivity(), View.OnClickListener {
             window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
             window.statusBarColor = resources.getColor(R.color.white, null)
         }
+    }
+
+
+    companion object {
+        lateinit var mainActivity : MainActivity
     }
 
 }
